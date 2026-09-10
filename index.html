@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LS Upload Sheet Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#ffffff; --ink:#1f2733; --muted:#647087;
+    --line:#e4e8f0; --accent:#3b5bdb; --accent-soft:#eaeffd;
+    --ok:#2f9e44; --ok-soft:#ebfbee; --warn:#e8590c; --warn-soft:#fff4e6;
+    --err:#e03131; --err-soft:#fff5f5; --fill:#fff3bf;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1420; --card:#171e2e; --ink:#e7ecf5; --muted:#95a0b5;
+      --line:#28324a; --accent:#748ffc; --accent-soft:#1b2540;
+      --ok:#69db7c; --ok-soft:#12251a; --warn:#ffa94d; --warn-soft:#2a1d10;
+      --err:#ff8787; --err-soft:#2a1414; --fill:#3a3410;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1420; --card:#171e2e; --ink:#e7ecf5; --muted:#95a0b5;
+    --line:#28324a; --accent:#748ffc; --accent-soft:#1b2540;
+    --ok:#69db7c; --ok-soft:#12251a; --warn:#ffa94d; --warn-soft:#2a1d10;
+    --err:#ff8787; --err-soft:#2a1414; --fill:#3a3410;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5; padding:24px 16px;
+  }
+  .wrap{max-width:860px; margin:0 auto}
+  header.top{margin-bottom:20px}
+  h1{font-size:22px; margin:0 0 4px; letter-spacing:-.01em}
+  .sub{color:var(--muted); font-size:14px; margin:0}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:20px; margin-bottom:16px;
+  }
+  .step-h{display:flex; align-items:center; gap:10px; margin:0 0 14px; font-size:15px; font-weight:600}
+  .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:24px; height:24px; border-radius:50%; background:var(--accent);
+    color:#fff; font-size:13px; font-weight:700; flex:none;
+  }
+  .drops{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media (max-width:640px){ .drops{grid-template-columns:1fr} }
+  .drop{
+    border:1.5px dashed var(--line); border-radius:12px; padding:16px;
+    text-align:center; cursor:pointer; transition:.15s; background:transparent;
+    position:relative;
+  }
+  .drop:hover{border-color:var(--accent); background:var(--accent-soft)}
+  .drop.dragover{border-color:var(--accent); background:var(--accent-soft)}
+  .drop.loaded{border-style:solid; border-color:var(--ok); background:var(--ok-soft)}
+  .drop.optional{grid-column:1 / -1}
+  .drop .label{font-weight:600; font-size:14px}
+  .drop .hint{font-size:12px; color:var(--muted); margin-top:3px}
+  .drop .fname{font-size:12.5px; color:var(--ok); margin-top:8px; font-weight:600; word-break:break-all}
+  .drop input{display:none}
+  .tag{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
+    padding:2px 7px; border-radius:20px; position:absolute; top:10px; right:10px}
+  .tag.req{background:var(--accent-soft); color:var(--accent)}
+  .tag.opt{background:var(--warn-soft); color:var(--warn)}
+  button.go{
+    width:100%; padding:13px; border:0; border-radius:12px; background:var(--accent);
+    color:#fff; font-size:15px; font-weight:700; cursor:pointer; transition:.15s;
+  }
+  button.go:hover{filter:brightness(1.06)}
+  button.go:disabled{opacity:.45; cursor:not-allowed}
+  .results{display:none}
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px}
+  @media (max-width:640px){ .kpis{grid-template-columns:repeat(2,1fr)} }
+  .kpi{background:var(--accent-soft); border-radius:10px; padding:12px; text-align:center}
+  .kpi .v{font-size:22px; font-weight:800; letter-spacing:-.02em}
+  .kpi .k{font-size:11.5px; color:var(--muted); margin-top:2px; text-transform:uppercase; letter-spacing:.02em}
+  .msg{border-radius:10px; padding:11px 13px; font-size:13.5px; margin-bottom:10px; border:1px solid transparent}
+  .msg.ok{background:var(--ok-soft); color:var(--ok); border-color:var(--ok)}
+  .msg.warn{background:var(--warn-soft); color:var(--warn); border-color:var(--warn)}
+  .msg.err{background:var(--err-soft); color:var(--err); border-color:var(--err)}
+  .msg ul{margin:6px 0 0; padding-left:18px}
+  .msg code{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px}
+  button.dl{
+    width:100%; padding:13px; border:0; border-radius:12px; background:var(--ok);
+    color:#fff; font-size:15px; font-weight:700; cursor:pointer; margin-top:4px;
+  }
+  button.dl:hover{filter:brightness(1.06)}
+  .tblwrap{overflow-x:auto; margin-top:14px; border:1px solid var(--line); border-radius:10px}
+  table{border-collapse:collapse; width:100%; font-size:12px; white-space:nowrap}
+  th,td{padding:6px 9px; text-align:left; border-bottom:1px solid var(--line)}
+  th{background:var(--accent-soft); font-weight:700; position:sticky; top:0}
+  td.fillcol{background:var(--fill)}
+  th.fillcol{background:var(--fill)}
+  .prev-note{font-size:12px; color:var(--muted); margin-top:8px}
+  .privacy{font-size:12px; color:var(--muted); text-align:center; margin-top:8px}
+  .privacy b{color:var(--ink)}
+  details{margin-top:12px; font-size:13px}
+  summary{cursor:pointer; color:var(--accent); font-weight:600}
+  details p, details li{color:var(--muted); font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>LS Upload Sheet Generator</h1>
+    <p class="sub">Lender Settlement upload sheet — pay IDs match karo, charges strip karo, bank details auto-fill karo. Sab kuch browser mein.</p>
+  </header>
+
+  <div class="card">
+    <div class="step-h"><span class="num">1</span> Files daalo</div>
+    <div class="drops">
+      <label class="drop" id="drop-ls">
+        <span class="tag req">Required</span>
+        <div class="label">LS file (source)</div>
+        <div class="hint">Aapka data — pay IDs + amount waali file</div>
+        <div class="fname" id="fname-ls"></div>
+        <input type="file" id="file-ls" accept=".xlsx,.xls">
+      </label>
+      <label class="drop" id="drop-dump">
+        <span class="tag req">Required</span>
+        <div class="label">Lender settlement dump</div>
+        <div class="hint">Bulk upload se download kiya hua dump</div>
+        <div class="fname" id="fname-dump"></div>
+        <input type="file" id="file-dump" accept=".xlsx,.xls">
+      </label>
+      <label class="drop optional" id="drop-base">
+        <span class="tag opt">Optional</span>
+        <div class="label">Base file (bank details mapping)</div>
+        <div class="hint">"For Vlookup" sheet waali base file — isse bank details (Bank / Beneficiary / A/C / IFSC) auto-fill ho jaayenge. Na doge to ye columns khaali rahenge.</div>
+        <div class="fname" id="fname-base"></div>
+        <input type="file" id="file-base" accept=".xlsx,.xls">
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="step-h"><span class="num">2</span> Sheet banao</div>
+    <button class="go" id="genBtn" disabled>Generate upload sheet</button>
+    <p class="privacy"><b>Privacy:</b> koi file server pe nahi jaati — sab processing aapke browser mein hi hoti hai.</p>
+  </div>
+
+  <div class="card results" id="resultsCard">
+    <div class="step-h"><span class="num">3</span> Result</div>
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="kpi-txn">0</div><div class="k">Transactions</div></div>
+      <div class="kpi"><div class="v" id="kpi-charges">0</div><div class="k">Charges stripped</div></div>
+      <div class="kpi"><div class="v" id="kpi-total">0</div><div class="k">Total settled</div></div>
+      <div class="kpi"><div class="v" id="kpi-bank">—</div><div class="k">Bank details</div></div>
+    </div>
+    <div id="messages"></div>
+    <button class="dl" id="dlBtn">⬇ Download upload sheet</button>
+    <div class="tblwrap" id="previewWrap"></div>
+    <p class="prev-note" id="previewNote"></p>
+    <details>
+      <summary>Ye tool kya karta hai?</summary>
+      <p>Har LS pay ID ko dump mein dhoondhta hai. Ek pay ID ke against EMI aur charges dono rows ho sakti hain — tool sirf woh row rakhta hai jiska <b>Amount Received from Customer</b> LS ke amount se exactly match karta hai (charges auto-strip). Phir dump format mein sheet banata hai: Payment Type + Amount Settled to Lender bhardeta hai, aur base file de to Bank/Beneficiary/A-c/IFSC bhi (lender ke naam se). <b>Settlement UTR</b> aur <b>Settlement Date</b> khaali (yellow) chhodta hai — woh aapke transfer records se aati hai. Koi formula nahi — direct upload-safe.</p>
+    </details>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ---------- header normalization + column finding ----------
+const norm = s => String(s==null?"":s).trim().toLowerCase().replace(/\s+/g," ");
+function findCol(headers, names){
+  const H = headers.map(norm);
+  for(const n of names){ const i = H.indexOf(norm(n)); if(i>=0) return i; }
+  return -1;
+}
+function toNum(v){
+  if(v==null||v==="") return NaN;
+  const n = Number(String(v).replace(/,/g,"").trim());
+  return isNaN(n)?NaN:n;
+}
+
+// ---------- state ----------
+const files = {ls:null, dump:null, base:null};
+let outputWB = null, outputName = "";
+
+// ---------- file input wiring ----------
+function wireDrop(kind){
+  const drop = document.getElementById("drop-"+kind);
+  const input = document.getElementById("file-"+kind);
+  const fname = document.getElementById("fname-"+kind);
+  function set(f){
+    files[kind]=f;
+    if(f){ drop.classList.add("loaded"); fname.textContent="✓ "+f.name; }
+    else { drop.classList.remove("loaded"); fname.textContent=""; }
+    refreshGen();
+  }
+  input.addEventListener("change", e=>{ if(e.target.files[0]) set(e.target.files[0]); });
+  ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("dragover");}));
+  ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("dragover");}));
+  drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) set(f); });
+}
+["ls","dump","base"].forEach(wireDrop);
+
+function refreshGen(){
+  document.getElementById("genBtn").disabled = !(files.ls && files.dump);
+}
+
+// ---------- read a workbook file to array-of-arrays per sheet ----------
+function readWB(file){
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload = e=>{
+      try{ res(XLSX.read(new Uint8Array(e.target.result),{type:"array"})); }
+      catch(err){ rej(err); }
+    };
+    r.onerror = ()=>rej(new Error("File read fail: "+file.name));
+    r.readAsArrayBuffer(file);
+  });
+}
+const sheetAOA = (wb, name) => XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:null, raw:false});
+
+// ---------- main generate ----------
+document.getElementById("genBtn").addEventListener("click", async ()=>{
+  const btn = document.getElementById("genBtn");
+  btn.disabled=true; btn.textContent="Processing…";
+  try{ await generate(); }
+  catch(err){ showError(err.message||String(err)); }
+  btn.textContent="Generate upload sheet"; refreshGen();
+});
+
+async function generate(){
+  clearMessages();
+
+  // --- parse LS ---
+  const lsWB = await readWB(files.ls);
+  const lsRows = sheetAOA(lsWB, lsWB.SheetNames[0]);
+  if(!lsRows.length) throw new Error("LS file khaali hai.");
+  const lsH = lsRows[0];
+  const cLsApp   = findCol(lsH, ["application id","app id"]);
+  const cLsTx    = findCol(lsH, ["transaction id","txn id","pay id"]);
+  const cLsPtype = findCol(lsH, ["payment type","pmt type"]);
+  const cLsAmt   = findCol(lsH, ["transaction amt","transaction amount","amount","amt"]);
+  const cLsLend  = findCol(lsH, ["lender name","lender"]);
+  if(cLsTx<0) throw new Error('LS file mein "TRANSACTION ID" column nahi mila.');
+  if(cLsAmt<0) throw new Error('LS file mein "TRANSACTION AMT" (amount) column nahi mila.');
+
+  const lsList = [];
+  for(let i=1;i<lsRows.length;i++){
+    const row = lsRows[i]; if(!row) continue;
+    const tx = row[cLsTx];
+    if(tx==null || String(tx).trim()==="") continue;
+    lsList.push({
+      payid: String(tx).trim(),
+      amt: cLsAmt>=0 ? row[cLsAmt] : null,
+      amtN: toNum(cLsAmt>=0?row[cLsAmt]:null),
+      ptype: cLsPtype>=0 ? row[cLsPtype] : null,
+      lender: cLsLend>=0 ? row[cLsLend] : null,
+    });
+  }
+  if(!lsList.length) throw new Error("LS file mein koi pay ID nahi mila.");
+
+  // --- parse DUMP ---
+  const dpWB = await readWB(files.dump);
+  const dpRows = sheetAOA(dpWB, dpWB.SheetNames[0]);
+  if(dpRows.length<2) throw new Error("Dump file khaali hai.");
+  const dpH = dpRows[0];
+  const dpNcols = dpH.length;
+  const cDpTx   = findCol(dpH, ["transaction id","txn id"]);
+  const cDpRecv = findCol(dpH, ["amount received from customer","amount received"]);
+  const cDpLend = findCol(dpH, ["lender"]);
+  const cDpPtype= findCol(dpH, ["payment type"]);
+  const cDpBank = findCol(dpH, ["lender bank name"]);
+  const cDpBenef= findCol(dpH, ["lender beneficiary name"]);
+  const cDpAcno = findCol(dpH, ["lender account number"]);
+  const cDpIfsc = findCol(dpH, ["lender ifsc"]);
+  const cDpAmtS = findCol(dpH, ["amount settled to lender"]);
+  const cDpUtr  = findCol(dpH, ["settlement utr"]);
+  const cDpDate = findCol(dpH, ["settlement date"]);
+  if(cDpTx<0) throw new Error('Dump mein "TRANSACTION ID" column nahi mila.');
+  if(cDpRecv<0) throw new Error('Dump mein "AMOUNT RECEIVED FROM CUSTOMER" column nahi mila.');
+
+  // index dump by pay id
+  const dpIndex = new Map();
+  for(let i=1;i<dpRows.length;i++){
+    const row = dpRows[i]; if(!row) continue;
+    const tx = row[cDpTx];
+    if(tx==null) continue;
+    const key = String(tx).trim();
+    if(!dpIndex.has(key)) dpIndex.set(key, []);
+    dpIndex.get(key).push(row);
+  }
+
+  // --- optional mapping from base file ("For Vlookup") ---
+  let mapping = null, mapCount = 0;
+  if(files.base){
+    const bWB = await readWB(files.base);
+    let mapSheet = bWB.SheetNames.find(n=>norm(n)==="for vlookup") || bWB.SheetNames[0];
+    const mRows = sheetAOA(bWB, mapSheet);
+    if(mRows.length){
+      const mH = mRows[0];
+      let ci = {
+        key:  findCol(mH,["nbfc","lender","lender name"]),
+        benef:findCol(mH,["lender beneficiary name","beneficiary name"]),
+        bank: findCol(mH,["lender bank name","bank name"]),
+        acno: findCol(mH,["account no.","account no","lender account number","account number"]),
+        ifsc: findCol(mH,["ifsc","lender ifsc"]),
+      };
+      // fallback to A-E if headers differ
+      if(ci.key<0)  ci.key=0;
+      if(ci.benef<0)ci.benef=1;
+      if(ci.bank<0) ci.bank=2;
+      if(ci.acno<0) ci.acno=3;
+      if(ci.ifsc<0) ci.ifsc=4;
+      mapping = new Map();
+      for(let i=1;i<mRows.length;i++){
+        const row=mRows[i]; if(!row) continue;
+        const k = row[ci.key];
+        if(k==null||String(k).trim()==="") continue;
+        mapping.set(norm(k), {
+          bank: row[ci.bank], benef: row[ci.benef],
+          acno: row[ci.acno]!=null?String(row[ci.acno]).trim():null,
+          ifsc: row[ci.ifsc],
+        });
+      }
+      mapCount = mapping.size;
+    }
+  }
+
+  // --- match + strip charges ---
+  const outRows = [];      // each = array of dump-width values
+  const warnNotFound = []; // pay id not in dump
+  const warnNoAmt = [];    // pay id in dump but no amount match
+  const warnMulti = [];    // multiple amount matches
+  const warnNoMap = new Set(); // lenders missing from mapping
+  let chargesStripped = 0, totalSettled = 0;
+
+  for(const it of lsList){
+    const cands = dpIndex.get(it.payid);
+    if(!cands || !cands.length){ warnNotFound.push(it.payid); continue; }
+    // pick rows whose received amount == LS amount
+    let matches = cands.filter(r=>{
+      const rn = toNum(r[cDpRecv]);
+      return !isNaN(rn) && !isNaN(it.amtN) && Math.abs(rn-it.amtN)<0.005;
+    });
+    // count the others as charges
+    chargesStripped += (cands.length - matches.length);
+    if(!matches.length){ warnNoAmt.push(it.payid); continue; }
+    if(matches.length>1){ warnMulti.push(it.payid); }
+    const src = matches[0];
+
+    // build output row of dump width
+    const out = new Array(dpNcols).fill(null);
+    for(let c=0;c<dpNcols;c++) out[c] = src[c]!=null ? src[c] : null;
+
+    // Payment type (from LS, default EMI)
+    if(cDpPtype>=0) out[cDpPtype] = (it.ptype!=null && String(it.ptype).trim()!=="") ? it.ptype : "EMI";
+    // Amount settled to lender = LS amount
+    if(cDpAmtS>=0) out[cDpAmtS] = it.amt!=null ? String(it.amt) : null;
+    // Bank details from mapping (by dump lender, fallback LS lender)
+    if(mapping){
+      const ln = (cDpLend>=0 && src[cDpLend]!=null) ? src[cDpLend] : it.lender;
+      const m = ln!=null ? mapping.get(norm(ln)) : null;
+      if(m){
+        if(cDpBank>=0)  out[cDpBank]=m.bank;
+        if(cDpBenef>=0) out[cDpBenef]=m.benef;
+        if(cDpAcno>=0)  out[cDpAcno]=m.acno;
+        if(cDpIfsc>=0)  out[cDpIfsc]=m.ifsc;
+      } else if(ln!=null){ warnNoMap.add(String(ln)); }
+    }
+    // clear UTR + settlement date (user fills)
+    if(cDpUtr>=0)  out[cDpUtr]=null;
+    if(cDpDate>=0) out[cDpDate]=null;
+
+    outRows.push(out);
+    const s = toNum(it.amt); if(!isNaN(s)) totalSettled += s;
+  }
+
+  if(!outRows.length) throw new Error("Koi transaction match nahi hua. Check karo ki LS ke pay IDs dump mein hain aur amounts match karte hain.");
+
+  // --- build workbook (dump headers + matched rows) ---
+  const fillIdx = new Set([cDpUtr, cDpDate].filter(i=>i>=0));
+  const aoa = [dpH.slice(0,dpNcols), ...outRows];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // styling
+  const hdrBase = {font:{bold:true,color:{rgb:"FFFFFF"},sz:10,name:"Arial"},
+                   fill:{fgColor:{rgb:"305496"}}, alignment:{horizontal:"center",vertical:"center",wrapText:true},
+                   border:bd("D9D9D9")};
+  const hdrFill = Object.assign({},hdrBase,{fill:{fgColor:{rgb:"C00000"}}});
+  const cellBase = {font:{sz:10,name:"Arial"}, border:bd("D9D9D9")};
+  const cellFill = Object.assign({},cellBase,{fill:{fgColor:{rgb:"FFF3BF"}}});
+  const R = aoa.length, C = dpNcols;
+  for(let c=0;c<C;c++){
+    const hc = XLSX.utils.encode_cell({r:0,c});
+    if(ws[hc]) ws[hc].s = fillIdx.has(c)?hdrFill:hdrBase;
+  }
+  const textCols = new Set([cDpAcno, cDpDate, cDpUtr].filter(i=>i>=0));
+  for(let r=1;r<R;r++){
+    for(let c=0;c<C;c++){
+      const ad = XLSX.utils.encode_cell({r,c});
+      if(!ws[ad]) ws[ad]={t:"s",v:""};
+      ws[ad].s = fillIdx.has(c)?cellFill:cellBase;
+      if(textCols.has(c) && ws[ad].v!=null){ ws[ad].t="s"; ws[ad].v=String(ws[ad].v); }
+    }
+  }
+  ws["!cols"] = dpH.slice(0,C).map(h=>({wch: Math.min(28, Math.max(11, norm(h).length+3))}));
+  ws["!freeze"] = {xSplit:0, ySplit:1};
+
+  outputWB = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(outputWB, ws, "LS_Upload");
+  const d = new Date();
+  const stamp = `${String(d.getDate()).padStart(2,"0")}-${String(d.getMonth()+1).padStart(2,"0")}-${d.getFullYear()}`;
+  outputName = `LS_Upload_${stamp}.xlsx`;
+
+  // --- render results ---
+  renderResults({
+    txn: outRows.length, charges: chargesStripped, total: totalSettled,
+    bankFilled: !!(mapping && (cDpBank>=0)),
+    warnNotFound, warnNoAmt, warnMulti, warnNoMap:[...warnNoMap], mapCount,
+    headers: dpH.slice(0,C), rows: outRows, fillIdx
+  });
+}
+
+function bd(rgb){ const s={style:"thin",color:{rgb}}; return {top:s,bottom:s,left:s,right:s}; }
+
+// ---------- results UI ----------
+function renderResults(r){
+  document.getElementById("resultsCard").style.display="block";
+  document.getElementById("kpi-txn").textContent = r.txn;
+  document.getElementById("kpi-charges").textContent = r.charges;
+  document.getElementById("kpi-total").textContent = "₹"+r.total.toLocaleString("en-IN");
+  document.getElementById("kpi-bank").textContent = r.bankFilled ? "Filled ✓" : "Blank";
+
+  const okMsg = `<div class="msg ok"><b>${r.txn} transactions</b> ready. ${r.charges} charge row(s) auto-stripped.`+
+    (r.bankFilled?` Bank details filled from mapping (${r.mapCount} lenders).`:` Bank details blank — base file nahi diya.`)+
+    ` <b>Settlement UTR</b> + <b>Settlement Date</b> (yellow) khud bharo.</div>`;
+  let html = okMsg;
+
+  if(r.warnNotFound.length) html += warnBlock("Dump mein nahi mile (skip kiye)", r.warnNotFound);
+  if(r.warnNoAmt.length)    html += warnBlock("Amount match nahi hua (skip kiye — check karo)", r.warnNoAmt);
+  if(r.warnMulti.length)    html += warnBlock("Ek se zyada amount-match mile (pehla liya — verify karo)", r.warnMulti);
+  if(r.warnNoMap.length)    html += warnBlock("In lenders ka mapping base file mein nahi — bank details blank", r.warnNoMap);
+  document.getElementById("messages").innerHTML = html;
+
+  // preview (first 12 rows)
+  const showN = Math.min(12, r.rows.length);
+  let t = "<table><thead><tr>";
+  r.headers.forEach((h,ci)=>{ t += `<th class="${r.fillIdx.has(ci)?"fillcol":""}">${esc(h)}</th>`; });
+  t += "</tr></thead><tbody>";
+  for(let i=0;i<showN;i++){
+    t += "<tr>";
+    r.headers.forEach((h,ci)=>{
+      const v = r.rows[i][ci];
+      t += `<td class="${r.fillIdx.has(ci)?"fillcol":""}">${esc(v==null?"":v)}</td>`;
+    });
+    t += "</tr>";
+  }
+  t += "</tbody></table>";
+  document.getElementById("previewWrap").innerHTML = t;
+  document.getElementById("previewNote").textContent =
+    r.rows.length>showN ? `Preview: pehli ${showN} rows (total ${r.rows.length}). Yellow columns aapko bharni hain.` :
+    `Total ${r.rows.length} rows. Yellow columns aapko bharni hain.`;
+}
+function warnBlock(title, items){
+  const shown = items.slice(0,20).map(x=>`<code>${esc(x)}</code>`).join(", ");
+  const more = items.length>20 ? ` …+${items.length-20} more` : "";
+  return `<div class="msg warn"><b>${title}:</b> ${shown}${more}</div>`;
+}
+function esc(s){ return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+// ---------- messages ----------
+function clearMessages(){ document.getElementById("messages").innerHTML=""; }
+function showError(m){
+  document.getElementById("resultsCard").style.display="block";
+  document.getElementById("messages").innerHTML = `<div class="msg err"><b>Error:</b> ${esc(m)}</div>`;
+  ["kpi-txn","kpi-charges"].forEach(id=>document.getElementById(id).textContent="0");
+  document.getElementById("kpi-total").textContent="₹0";
+  document.getElementById("kpi-bank").textContent="—";
+  document.getElementById("previewWrap").innerHTML="";
+  document.getElementById("previewNote").textContent="";
+  outputWB=null;
+}
+
+// ---------- download ----------
+document.getElementById("dlBtn").addEventListener("click", ()=>{
+  if(!outputWB){ alert("Pehle sheet generate karo."); return; }
+  XLSX.writeFile(outputWB, outputName, {bookType:"xlsx"});
+});
+</script>
+</body>
+</html>
