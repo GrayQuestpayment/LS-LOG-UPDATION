@@ -263,6 +263,7 @@ async function generate(){
   if(dpRows.length<2) throw new Error("Dump file khaali hai.");
   const dpH = dpRows[0];
   const dpNcols = dpH.length;
+  const cDpApp  = findCol(dpH, ["application id","app id"]);
   const cDpTx   = findCol(dpH, ["transaction id","txn id"]);
   const cDpRecv = findCol(dpH, ["amount received from customer","amount received"]);
   const cDpLend = findCol(dpH, ["lender"]);
@@ -350,10 +351,13 @@ async function generate(){
     const out = new Array(dpNcols).fill(null);
     for(let c=0;c<dpNcols;c++) out[c] = src[c]!=null ? src[c] : null;
 
+    // App ID + Amount Received as numbers (match upload format)
+    if(cDpApp>=0  && out[cDpApp]!=null){  const n=toNum(out[cDpApp]);  if(!isNaN(n)) out[cDpApp]=n; }
+    if(cDpRecv>=0 && out[cDpRecv]!=null){ const n=toNum(out[cDpRecv]); if(!isNaN(n)) out[cDpRecv]=n; }
     // Payment type (from LS, default EMI)
     if(cDpPtype>=0) out[cDpPtype] = (it.ptype!=null && String(it.ptype).trim()!=="") ? it.ptype : "EMI";
-    // Amount settled to lender = LS amount
-    if(cDpAmtS>=0) out[cDpAmtS] = it.amt!=null ? String(it.amt) : null;
+    // Amount settled to lender = LS amount (numeric)
+    if(cDpAmtS>=0){ const n=toNum(it.amt); out[cDpAmtS] = !isNaN(n) ? n : (it.amt!=null?it.amt:null); }
     // Bank details from mapping (by dump lender, fallback LS lender)
     if(mapping){
       const ln = (cDpLend>=0 && src[cDpLend]!=null) ? src[cDpLend] : it.lender;
@@ -398,7 +402,7 @@ async function generate(){
       const ad = XLSX.utils.encode_cell({r,c});
       if(!ws[ad]) ws[ad]={t:"s",v:""};
       ws[ad].s = fillIdx.has(c)?cellFill:cellBase;
-      if(textCols.has(c) && ws[ad].v!=null){ ws[ad].t="s"; ws[ad].v=String(ws[ad].v); }
+      if(textCols.has(c)){ ws[ad].t="s"; if(ws[ad].v!=null) ws[ad].v=String(ws[ad].v); ws[ad].z="@"; }
     }
   }
   ws["!cols"] = dpH.slice(0,C).map(h=>({wch: Math.min(28, Math.max(11, norm(h).length+3))}));
